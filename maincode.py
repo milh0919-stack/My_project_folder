@@ -106,7 +106,7 @@ def evaluate_outfit(top, bot):
     if top in neutrals or bot in neutrals:
         darks = ["Black", "Brown", "Navy", "Deep Purple", "Wine", "Forest"]
         if top in darks and bot in darks:
-            return "Too Dark?"
+            return "Too Dark"
         return "Safe Balance"
 
     # 4. 보색 포인트
