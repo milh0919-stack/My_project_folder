@@ -173,7 +173,7 @@ while True:
             cv2.rectangle(annotated_frame, (x1, top_y1), (x2, top_y2), (255, 255, 0), 1)
             cv2.rectangle(annotated_frame, (x1, bot_y1), (x2, bot_y2), (255, 0, 255), 1)
 
-    cv2.imshow('Fashion AI - Debug Mode', annotated_frame)
+    cv2.imshow('Fashion AI', annotated_frame)
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
