@@ -3,21 +3,21 @@ import numpy as np
 from ultralytics import YOLO
 from collections import Counter
 
-# 1. YOLO 모델 불러오기
+# 1. Import YOLO Model
 model = YOLO('yolov8n.pt')
 
-# === [핵심 1] 23가지 색상 분류 로직 ===
+# 23 color classification logic
 def get_color_category(h, s, v):
-    # 1. 무채색 (Achromatic)
+    # 1. Achromatic
     if s < 20:
         if v > 180: return "White"
         elif v < 90: return "Black"
         else: return "Grey"
 
-    # 2. 유채색 (Chromatic)
+    # 2. Chromatic
     mode = "Bright" if v > 130 else "Dark"
 
-    # Hue 범위 (0~179)를 10등분하여 매핑
+    # Mapping the Hue range (0 to 179) by dividing it into 10 equal parts
     if 0 <= h < 10 or 175 <= h <= 179: return "Vivid Red" if mode == "Bright" else "Dark Red"
     elif 10 <= h < 25: return "Orange" if mode == "Bright" else "Brown"
     elif 25 <= h < 40: return "Yellow" if mode == "Bright" else "Beige"
@@ -31,10 +31,11 @@ def get_color_category(h, s, v):
     
     return "Other"
 
-# 3. 5x5 그리드 투표 방식
+# 3. 5x5 Grid Voting Method
+# Error Countermeasures
 def detect_color_by_grid(image_crop, label=""):
     if image_crop is None or image_crop.size == 0: return "Unknown"
-
+# h,s,v conversion 
     hsv = cv2.cvtColor(image_crop, cv2.COLOR_BGR2HSV)
     h, w, _ = hsv.shape
 
@@ -44,7 +45,7 @@ def detect_color_by_grid(image_crop, label=""):
     step_w = w // grid_cols
 
     votes = [] 
-
+# Location-based color judgment
     for i in range(grid_rows):
         for j in range(grid_cols):
             y1 = i * step_h
@@ -53,20 +54,20 @@ def detect_color_by_grid(image_crop, label=""):
             x2 = (j + 1) * step_w
             
             cell = hsv[y1:y2, x1:x2]
-            
+            # color judgment
             if cell.size > 0:
                 mean_color = np.mean(cell, axis=(0, 1))
                 category = get_color_category(mean_color[0], mean_color[1], mean_color[2])
                 votes.append(category)
-
+# Error Countermeasures
     if not votes: return "Unknown"
-    
+# Return the Mode    
     vote_result = Counter(votes)
     most_common_color = vote_result.most_common(1)[0][0]
     
     return most_common_color
 
-# [추가됨] 화면에 5x5 격자를 그려주는 도우미 함수
+# 4. Helper function to draw a 5x5 grid on the screen
 def draw_grid(image, x1, y1, x2, y2, rows=5, cols=5, color=(200, 200, 200)):
     step_h = (y2 - y1) // rows
     step_w = (x2 - x1) // cols
@@ -75,12 +76,13 @@ def draw_grid(image, x1, y1, x2, y2, rows=5, cols=5, color=(200, 200, 200)):
     for j in range(1, cols):
         cv2.line(image, (x1 + j * step_w, y1), (x1 + j * step_w, y2), color, 1)
 
-# === [수정됨] 심플한 패션 평가 엔진 (띄어쓰기 수정 완료) ===
+# 5. A simple fashion evaluation engine
+# Error Countermeasures
 def evaluate_outfit(top, bot):
     if top == "Unknown" or bot == "Unknown": 
         return "Detecting..."
 
-    # 1. 톤온톤
+    # 1. Tone-on-tone
     tone_pairs = [
         ("Sky Blue", "Royal Blue"), ("Royal Blue", "Sky Blue"),
         ("Beige", "Brown"), ("Brown", "Beige"),
@@ -96,12 +98,12 @@ def evaluate_outfit(top, bot):
     if top == bot:
         return "Good Identical color"
 
-    # 2. 얼스룩
+    # 2. Earth tone
     earth_colors = ["Brown", "Beige", "Olive", "Forest", "Green"]
     if top in earth_colors and bot in earth_colors:
         return "Natural Earth Look"
 
-    # 3. 무채색
+    # 3. achromatic color
     neutrals = ["Black", "White", "Grey", "Navy", "Beige", "Denim"]
     if top in neutrals or bot in neutrals:
         darks = ["Black", "Brown", "Navy", "Deep Purple", "Wine", "Forest"]
@@ -109,38 +111,39 @@ def evaluate_outfit(top, bot):
             return "Too Dark"
         return "Safe Balance"
 
-    # 4. 보색 포인트
+    # 4. Tone in tone(contrast)
     if (top == "Yellow" and bot in ["Navy", "Royal Blue"]) or \
        (bot == "Yellow" and top in ["Navy", "Royal Blue"]):
         return "Active Pop Style"
 
     return "Bad Choice..."
 
-# 4. 웹캠 실행 및 메인 루프
+# 4. Running Webcam and Main Loop
 cap = cv2.VideoCapture(0)
+# Adjust if the room is too dark or bright (integer between -13 and -1)
 cap.set(cv2.CAP_PROP_EXPOSURE, -6.0)
-
+# Error Countermeasures
 if not cap.isOpened():
-    print("웹캠을 열 수 없습니다.")
+    print("error...")
     exit()
 
-print("실행 중... (5x5 Grid Voting Mode)")
+print("Running...")
 
 while True:
     ret, frame = cap.read()
     if not ret: break
-
+    # Using YOLO & creating visualization image
     results = model(frame, classes=[0], verbose=False)
     annotated_frame = frame.copy()
-
+# vertex coordinates in the bounding box
     for result in results:
         boxes = result.boxes
         for box in boxes:
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             
-            # 사람 박스
+            # a person's box
             cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            
+            # Dividing the upper and lower body boxes
             height = y2 - y1
             top_y1 = y1 + int(height * 0.15)
             top_y2 = y1 + int(height * 0.45)
@@ -149,32 +152,32 @@ while True:
 
             top_crop = frame[top_y1:top_y2, x1:x2]
             bot_crop = frame[bot_y1:bot_y2, x1:x2]
-
+            # color judgment
             top_color = detect_color_by_grid(top_crop, "Top")
             bot_color = detect_color_by_grid(bot_crop, "Bot")
-
+            # Drawing a visualization grid
             draw_grid(annotated_frame, x1, top_y1, x2, top_y2, color=(255, 255, 0)) 
             draw_grid(annotated_frame, x1, bot_y1, x2, bot_y2, color=(255, 0, 255))
-
+            # Color information and evaluation
             info_text = f"Top: {top_color} | Bot: {bot_color}"
             eval_text = evaluate_outfit(top_color, bot_color)
-            
+            # Text Size Measurement
             (tw, th), _ = cv2.getTextSize(eval_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
             
             text_y = y1 + 45  
 
-            # 배경 박스 그리기
+            # Draw Background Boxes
             cv2.rectangle(annotated_frame, (x1, text_y - th*2 - 15), (x1 + tw + 100, text_y + 10), (0, 0, 0), -1)
             
-            # 텍스트 쓰기
+            # Write text
             cv2.putText(annotated_frame, info_text, (x1+5, text_y - 25), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
             cv2.putText(annotated_frame, eval_text, (x1+5, text_y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
             
             cv2.rectangle(annotated_frame, (x1, top_y1), (x2, top_y2), (255, 255, 0), 1)
             cv2.rectangle(annotated_frame, (x1, bot_y1), (x2, bot_y2), (255, 0, 255), 1)
-
+    # Visualization
     cv2.imshow('Fashion AI', annotated_frame)
-
+# 5. Waiting for the break command
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
